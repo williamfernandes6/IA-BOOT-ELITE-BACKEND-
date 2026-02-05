@@ -20,7 +20,7 @@ app.post('/feedback', async (req, res) => {
         const log = await fs.readJson(LOG_FILE).catch(() => []);
         log.push({ status, hora, dia, alvo, timestamp: new Date() });
         await fs.writeJson(LOG_FILE, log);
-        res.json({ message: "IA evoluindo!" });
+        res.json({ message: "IA Evoluindo..." });
     } catch(e) { res.status(500).send("Erro"); }
 });
 
@@ -29,8 +29,11 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Sem imagem" });
     const text = await tesseract.recognize(req.file.buffer, config);
     
-    const bancaMatch = text.match(/(?:AO|AOA|Kz|KZ|Saldo|Banca|Balance)\s?([\d\.,\s]{3,15})/i);
-    const banca = bancaMatch ? `Kz ${bancaMatch[1].trim()}` : "Ajuste o Print";
+    // --- AJUSTE ULTRA-SENSÍVEL PARA LER BANCA (1.007 AOA / Kz) ---
+    const bancaRegex = /(?:Saldo|Balance|Kz|AOA|AO|Total|[\s])\s?([\d\.,\s]{2,12}(?:[\.,]\d{2})?)/i;
+    const matchBanca = text.match(bancaRegex);
+    const bancaResgate = text.match(/\d+[\.,]\d{0,2}/); 
+    const banca = matchBanca ? `Kz ${matchBanca[1].trim()}` : (bancaResgate ? `Kz ${bancaResgate[0]}` : "Ajuste o Print");
     
     const velasRaw = text.match(/\d+[\.,]\d{2}/g) || [];
     const velas = velasRaw.map(v => parseFloat(v.replace(',', '.'))).slice(0, 25);
@@ -44,13 +47,13 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
 
     let status, cor, gapMin, alvo, pct;
 
-    // --- NOVA LÓGICA DE ASSERTIVIDADE SUPER INTELIGENTE ---
+    // --- LÓGICA DE ASSERTIVIDADE PEDIDA (100%, 80-99%, <80%) ---
     if (gapRosa > 15 && tendencia === "PAGAMENTO") {
         status = "CERTEIRO"; cor = "#22c55e"; pct = "100%"; gapMin = 2; alvo = "10.00x+";
     } else if (gapRoxa > 7 || gapRosa > 8) {
         status = "SINAL PROVÁVEL"; cor = "#3b82f6"; pct = (Math.floor(Math.random() * (99 - 80 + 1)) + 80) + "%"; gapMin = 4; alvo = "5.00x+";
     } else {
-        status = "POUCO CERTEIRO (RISCO)"; cor = "#f59e0b"; pct = (Math.floor(Math.random() * (79 - 10 + 1)) + 10) + "%"; gapMin = 6; alvo = "2.00x";
+        status = "SINAL DE RISCO (POUCO CERTEIRO)"; cor = "#f59e0b"; pct = (Math.floor(Math.random() * (79 - 10 + 1)) + 10) + "%"; gapMin = 6; alvo = "2.00x";
     }
 
     const agora = new Date();
@@ -58,7 +61,7 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
     const timer = agora.toLocaleTimeString("pt-PT", { hour12: false, timeZone: "Africa/Luanda" });
 
     res.json({ status, cor, pct, banca, timerRosa: timer, alvo, historico: velas, tendencia, corTendencia });
-  } catch (e) { res.status(500).send("Erro de Processamento"); }
+  } catch (e) { res.status(500).send("Erro"); }
 });
 
 app.listen(process.env.PORT || 3000);

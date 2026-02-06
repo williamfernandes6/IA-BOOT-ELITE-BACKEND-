@@ -1,4 +1,4 @@
-FROM node:18
+FROM node:18-slim
 RUN apt-get update && apt-get install -y tesseract-ocr tesseract-ocr-por libtesseract-dev && apt-get clean
 WORKDIR /app
 COPY package*.json ./
